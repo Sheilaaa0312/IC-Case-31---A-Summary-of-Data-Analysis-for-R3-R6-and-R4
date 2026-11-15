@@ -1,0 +1,287 @@
+---
+title: "Case 31: Summary of Data Analysis"
+subtitle: "R3, R6, and R4a–R4c | Employees Federal Credit Union"
+author: "Xueying Luo"
+date: 2026-11-13
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 2
+    toc-location: right-body
+    embed-resources: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| include: false
+library(tidyverse)
+library(haven)
+library(knitr)
+
+dat <- read_sav("Case31_Data.sav")
+names(dat) <- tolower(names(dat))
+names(dat) <- sub("^q([0-9]+)_r$", "q\\1r", names(dat))
+dat <- dat |> mutate(across(where(is.numeric), as.numeric))
+dat$q12 <- ifelse(dat$q12 == 3, NA, dat$q12)
+
+mean_test <- function(x, value = 3) {
+  result <- t.test(x, mu = value)
+  tibble(N = sum(!is.na(x)),
+         Mean = mean(x, na.rm = TRUE),
+         SD = sd(x, na.rm = TRUE),
+         `Test value` = value,
+         t = unname(result$statistic),
+         df = unname(result$parameter),
+         p = format.pval(result$p.value, digits = 3, eps = .001))
+}
+
+group_test <- function(variable) {
+  hq <- dat[[variable]][dat$q38 == 1]
+  other <- dat[[variable]][dat$q38 == 2]
+  result <- t.test(hq, other)
+  tibble(`HQ N` = sum(!is.na(hq)),
+         `HQ mean` = mean(hq, na.rm = TRUE),
+         `Other N` = sum(!is.na(other)),
+         `Other mean` = mean(other, na.rm = TRUE),
+         t = unname(result$statistic),
+         df = unname(result$parameter),
+         p = format.pval(result$p.value, digits = 3, eps = .001))
+}
+```
+
+# R3 — Attitudes toward employees
+
+## Descriptive statistics
+
+Q3–Q6 ask whether employees are courteous, helpful, professional, and available. Responses range from 1 (strongly disagree) to 5 (strongly agree).
+
+```{r}
+#| label: tbl-r3-ratings
+#| tbl-cap: "Members' ratings of EFCU employees"
+employee_items <- c("q3", "q4", "q5", "q6")
+employee_labels <- c("Courteous", "Helpful", "Professional", "Available")
+
+r3 <- map_dfr(seq_along(employee_items), function(i) {
+  x <- dat[[employee_items[i]]]
+  tibble(Item = employee_labels[i],
+         N = sum(!is.na(x)),
+         Mean = mean(x, na.rm = TRUE),
+         SD = sd(x, na.rm = TRUE),
+         `Agree (%)` = 100 * mean(x >= 4, na.rm = TRUE))
+})
+
+kable(r3, digits = 2)
+```
+
+Employees received positive ratings overall. Courtesy stood out, with 89.8% agreeing that employees are courteous. Availability received the lowest rating of the four items, although 78.9% still agreed that employees are available. EFCU appears to be doing well with customer service, but it may be worth checking whether members can easily reach someone when they need help.
+
+## One-sample t-test
+
+I compared the average employee rating (`att_employee`) with 3, the neutral point on the scale.
+
+```{r}
+#| label: tbl-r3-test
+#| tbl-cap: "One-sample t-test for employee proficiency"
+kable(mean_test(dat$att_employee), digits = 3)
+```
+
+The average score was 4.21 out of 5, significantly higher than neutral (*t*(127) = 22.95, *p* \< .001). Members generally have a positive opinion of EFCU employees, especially their courtesy and helpfulness.
+
+# R6 — Attitudes toward EFCU's operations
+
+## Statement delivery and confidentiality
+
+I first looked at how members felt about their account statements and the handling of their information.
+
+```{r}
+#| label: tbl-r6-responses
+#| tbl-cap: "Members' responses about statements and confidentiality"
+r6_responses <- tibble(
+  Question = c("Q9: Statements arrive about right",
+               "Q10r: Statement accuracy is good or excellent",
+               "Q11: Statements are easy to understand",
+               "Q12: Account information is confidential"),
+  `Valid N` = c(sum(!is.na(dat$q9)), sum(!is.na(dat$q10r)),
+                sum(!is.na(dat$q11)), sum(!is.na(dat$q12))),
+  `Favorable N` = c(sum(dat$q9 == 3, na.rm = TRUE),
+                    sum(dat$q10r >= 3, na.rm = TRUE),
+                    sum(dat$q11 == 1, na.rm = TRUE),
+                    sum(dat$q12 == 1, na.rm = TRUE))
+) |>
+  mutate(`Favorable (%)` = 100 * `Favorable N` / `Valid N`)
+
+kable(r6_responses, digits = 1)
+```
+
+Most members were satisfied with their account statements. About 77.3% said statements arrived about as often as they should, 95.3% rated their accuracy as good or excellent, and 97.7% said they were easy to understand.
+
+Confidentiality was less reassuring. Among members who answered Q12, only 69.8% believed their account information was kept confidential. The 22 respondents who selected "no answer" were excluded from that percentage.
+
+## Operational ratings and one-sample t-tests
+
+I also examined Q31–Q34 and Q37r, which cover privacy, loan applications, service adequacy, and overall management. I used 3 as the comparison value for these five-point measures. Statement accuracy (Q10r) uses a four-point scale, so its comparison value is 2.5.
+
+```{r}
+#| label: tbl-r6-tests
+#| tbl-cap: "Operational ratings and one-sample t-tests"
+r6_variables <- c("q10r", "q31", "q32", "q33", "q34", "q37r")
+r6_labels <- c("Statement accuracy", "Information kept confidential",
+               "Prompt loan processing", "Services meet members' needs",
+               "Simple loan applications", "Overall management")
+
+r6_tests <- map_dfr(seq_along(r6_variables), function(i) {
+  midpoint <- if (i == 1) 2.5 else 3
+  bind_cols(tibble(Measure = r6_labels[i]),
+            mean_test(dat[[r6_variables[i]]], midpoint))
+})
+
+kable(r6_tests, digits = 3)
+```
+
+Members rated EFCU's management positively, with an average of 4.07 out of 5. They also gave favorable ratings to protecting financial information (3.95), prompt loan processing (3.72), services meeting their needs (3.59), and simple loan applications (3.46). All were significantly above the midpoint (*p* \< .001).
+
+However, the more mixed answers to Q12 suggest that EFCU should not assume everyone feels confident about privacy. Clearer communication about how member information is protected could help.
+
+# R4a — Employee ratings by residence
+
+## Independent-samples t-test
+
+I compared the employee-proficiency scores of members living in the headquarters area (Q38 = 1) and those living elsewhere (Q38 = 2).
+
+```{r}
+#| label: tbl-r4a-test
+#| tbl-cap: "Employee ratings by residence"
+kable(group_test("att_employee"), digits = 3)
+```
+
+Members in the headquarters area gave employees an average score of 4.28, compared with 4.14 among members living elsewhere. The difference was not statistically significant (*p* = .195). Both groups seem to have similarly positive views of the employees.
+
+# R4b — Service awareness by residence
+
+## Cross-tabulations and chi-square tests
+
+I compared the two residence groups on awareness of the 14 services in Q13r–Q26r. The three response categories are unaware, aware but not used, and aware and used.
+
+```{r}
+service_names <- c(
+  "Regular share accounts", "Special subaccounts", "Christmas club accounts",
+  "Individual retirement accounts", "MasterCard credit cards", "Signature loans",
+  "New-car loans", "Late-model car loans", "Older-model car loans",
+  "Household goods/appliance loans", "Recreational loans",
+  "Share-collateralized loans", "IRA loans", "Line-of-credit loans"
+)
+
+service_results <- map_dfr(13:26, function(i) {
+  counts <- table(
+    factor(dat$q38, levels = 1:2),
+    factor(dat[[paste0("q", i, "r")]], levels = 1:3)
+  )
+  test <- chisq.test(counts[, colSums(counts) > 0, drop = FALSE])
+  tibble(
+    Question = paste0("Q", i),
+    Service = service_names[i - 12],
+    `HQ unaware` = counts[1, 1],
+    `HQ aware/unused` = counts[1, 2],
+    `HQ used` = counts[1, 3],
+    `Other unaware` = counts[2, 1],
+    `Other aware/unused` = counts[2, 2],
+    `Other used` = counts[2, 3],
+    `HQ aware (%)` = 100 * sum(counts[1, 2:3]) / sum(counts[1, ]),
+    `Other aware (%)` = 100 * sum(counts[2, 2:3]) / sum(counts[2, ]),
+    `Chi-square` = unname(test$statistic),
+    p = format.pval(test$p.value, digits = 3, eps = .001)
+  )
+})
+```
+
+```{r}
+#| label: tbl-r4b-awareness
+#| tbl-cap: "Awareness of each service by residence"
+kable(service_results |>
+        select(Question, Service, `HQ aware (%)`, `Other aware (%)`,
+               `Chi-square`, p),
+      digits = 2)
+```
+
+```{r}
+#| label: tbl-r4b-counts
+#| tbl-cap: "Service-awareness response counts by residence"
+kable(service_results |>
+        select(Question, `HQ unaware`, `HQ aware/unused`, `HQ used`,
+               `Other unaware`, `Other aware/unused`, `Other used`))
+```
+
+Awareness levels differed somewhat from one service to another, but none of the 14 chi-square tests showed a statistically significant difference by residence. For example, 82.5% of members in the headquarters area knew about MasterCard credit cards, compared with 93.0% elsewhere, but the difference was not statistically significant (*p* = .150).
+
+Overall, the survey does not show a clear difference in service awareness between the two areas. Some categories have small counts, so the chi-square results should be treated with caution.
+
+# R4c — Operational ratings by residence
+
+## Independent-samples t-tests
+
+I compared the two groups on their ratings of statement delivery, loan processing, service adequacy, and overall management.
+
+```{r}
+#| label: tbl-r4c-test
+#| tbl-cap: "Operational ratings by residence"
+r4c_variables <- c("q9r", "q10r", "q31", "q32", "q33", "q34", "q37r")
+r4c_labels <- c("Statement frequency", "Statement accuracy",
+                "Information kept confidential", "Prompt loan processing",
+                "Services meet members' needs", "Simple loan applications",
+                "Overall management")
+
+r4c_tests <- map_dfr(seq_along(r4c_variables), function(i) {
+  bind_cols(tibble(Measure = r4c_labels[i]),
+            group_test(r4c_variables[i]))
+})
+
+kable(r4c_tests, digits = 3)
+```
+
+Most ratings were similar between the two groups. One difference appeared in Q34: members in the headquarters area rated the simplicity of loan applications lower (3.28) than members living elsewhere (3.61). This difference was statistically significant (*p* = .025).
+
+This may be worth looking into, especially if headquarters-area members have different experiences with the application process. Since several questions were tested, this one result should be interpreted cautiously. Statement frequency (Q9r) is also a frequency category, so its mean should not be treated as a satisfaction rating.
+
+## Chi-square tests for yes/no questions
+
+Q11 asks whether statements are easy to understand, and Q12 asks whether members believe their account information is kept confidential.
+
+```{r}
+#| label: tbl-r4c-chi
+#| tbl-cap: "Yes/no responses by residence"
+binary_results <- map_dfr(c("q11", "q12"), function(variable) {
+  counts <- table(
+    factor(dat$q38, levels = 1:2),
+    factor(dat[[variable]], levels = 1:2)
+  )
+  test <- chisq.test(counts)
+  tibble(
+    Question = toupper(variable),
+    `HQ yes` = counts[1, 1],
+    `HQ no` = counts[1, 2],
+    `Other yes` = counts[2, 1],
+    `Other no` = counts[2, 2],
+    `HQ yes (%)` = 100 * counts[1, 1] / sum(counts[1, ]),
+    `Other yes (%)` = 100 * counts[2, 1] / sum(counts[2, ]),
+    `Chi-square` = unname(test$statistic),
+    p = format.pval(test$p.value, digits = 3, eps = .001)
+  )
+})
+
+kable(binary_results, digits = 2)
+```
+
+Nearly everyone in both groups said their statements were easy to understand (96.5% in the headquarters area and 98.6% elsewhere). For confidentiality, 63.3% of headquarters-area members answered yes, compared with 75.4% elsewhere. Neither difference was statistically significant. Because very few people answered no to Q11, that result should be read cautiously.
+
+# Conclusion
+
+Members generally have a positive opinion of EFCU's employees and operations. Courtesy and overall management are particular strengths. Availability and confidence in confidentiality could use more attention. There was no clear difference between the two residence groups in employee ratings or service awareness. The lower rating for loan-application simplicity in the headquarters area is worth following up on, but it is not enough to conclude that the location itself caused the difference.
+
+# Appendix
+
+- GitHub repository
+- GitHub Pages
