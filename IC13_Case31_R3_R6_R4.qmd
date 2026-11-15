@@ -283,5 +283,5 @@ Members generally have a positive opinion of EFCU's employees and operations. Co
 
 # Appendix
 
-- GitHub repository
-- GitHub Pages
+- [GitHub repository](https://github.com/Sheilaaa0312/IC-Case-31---A-Summary-of-Data-Analysis-for-R3-R6-and-R4)
+- [GitHub Pages](https://sheilaaa0312.github.io/IC-Case-31---A-Summary-of-Data-Analysis-for-R3-R6-and-R4/IC13_Case31_R3_R6_R4)
